@@ -1,0 +1,50 @@
+name: Deploy a GitHub Pages
+
+# Publica el sitio cada vez que entra un cambio a main (merge de un PR o push directo).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un deploy a la vez; si llega otro mientras corre, espera en lugar de cancelarlo.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar que existan todas las imágenes referenciadas
+        run: |
+          missing=0
+          for f in *.html; do
+            for img in $(grep -oE 'img/[A-Za-z0-9._-]+' "$f" | sort -u); do
+              [ -f "$img" ] || { echo "::error file=$f::Falta $img"; missing=1; }
+            done
+          done
+          exit $missing
+
+      - name: Armar carpeta del sitio
+        run: |
+          mkdir _site
+          cp -r *.html css js img _site/
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
